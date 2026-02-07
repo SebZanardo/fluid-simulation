@@ -2,7 +2,7 @@
 
 # CONSTANT DEFINTIONS #########################################################
 
-BUILD_DIR="build"
+BUILD_DIR="compiled"
 
 # Define all .c files to compile in one place here
 SOURCES=$(cat <<EOF
