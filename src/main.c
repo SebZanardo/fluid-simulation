@@ -61,24 +61,24 @@ int main(void) {
             FluidDensityStep(fluid->dens, fluid->dens_prev, fluid->u, fluid->v, diff);
             FluidGridClearChanges(fluid);
             accumulator -= FIXED_DT;
-        }
 
-        // Render
-        for (i32 y = 0; y < FLUID_SIZE_BUFFERED; y++) {
-            for (i32 x = 0; x < FLUID_SIZE_BUFFERED; x++) {
-                i32 grid_index = x + y * TEXTURE_WIDTH;
-                f32 density = Clamp(fluid->dens[FluidIX(x, y)], 0.0f, 1.0f);
-                Color c = (Color) {
-                    (u8)(density * density * density * 128),
-                    (u8)(density * density * 255),
-                    (u8)(density * 255),
-                    255
-                };
-                pixels[grid_index] = c;
+            // Update render texture only when changing fluid
+            for (i32 y = 0; y < FLUID_SIZE_BUFFERED; y++) {
+                for (i32 x = 0; x < FLUID_SIZE_BUFFERED; x++) {
+                    i32 grid_index = x + y * TEXTURE_WIDTH;
+                    f32 density = Clamp(fluid->dens[FluidIX(x, y)], 0.0f, 1.0f);
+                    Color c = (Color) {
+                        (u8)(density * density * density * 128),
+                        (u8)(density * density * 255),
+                        (u8)(density * 255),
+                        255
+                    };
+                    pixels[grid_index] = c;
+                }
             }
-        }
 
-        UpdateTexture(texture, pixels);
+            UpdateTexture(texture, pixels);
+        }
 
         BeginDrawing();
         ClearBackground(BLACK);
