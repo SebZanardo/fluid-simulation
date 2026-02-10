@@ -1,0 +1,4 @@
+- Simplify existing Fluid API
+- Collision grid should be twice resolution of fluid grid to stop pass through
+- Composable wrapper Chunk API that allows for multiple fluid grids to interact with each other
+- Async file I/O for fluid chunk data to disk when unloaded
