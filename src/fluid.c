@@ -19,6 +19,7 @@ FluidGrid* FluidGridCreate(Arena* arena) {
     fluid->v_prev = ArenaPushArray(arena, f32, FLUID_CELLS_BUFFERED);
     fluid->dens = ArenaPushArray(arena, f32, FLUID_CELLS_BUFFERED);
     fluid->dens_prev = ArenaPushArray(arena, f32, FLUID_CELLS_BUFFERED);
+    fluid->solid = ArenaPushArray(arena, bool, FLUID_CELLS_BUFFERED);
     return fluid;
 }
 
@@ -32,6 +33,7 @@ void FluidGridReset(FluidGrid* fluid) {
     memset(fluid->dens, 0, sizeof(f32) * FLUID_CELLS_BUFFERED);
     memset(fluid->u, 0, sizeof(f32) * FLUID_CELLS_BUFFERED);
     memset(fluid->v, 0, sizeof(f32) * FLUID_CELLS_BUFFERED);
+    memset(fluid->solid, 0, sizeof(bool) * FLUID_CELLS_BUFFERED);
     FluidGridClearChanges(fluid);
 }
 
@@ -41,7 +43,8 @@ static void FluidAddSource(f32* x, f32* s) {
     }
 }
 
-static void FluidSetBound(i32 b, f32* x) {
+static void FluidSetBound(i32 b, f32* x, bool* solid) {
+    // Border edges
     for (i32 i = 1; i <= FLUID_SIZE; i++) {
         x[FluidIX(0, i)] = (b == 1) ? -x[FluidIX(1, i)] : x[FluidIX(1, i)];
         x[FluidIX(FLUID_SIZE + 1, i)] = (b == 1) ? -x[FluidIX(FLUID_SIZE, i)] : x[FluidIX(FLUID_SIZE, i)];
@@ -49,13 +52,46 @@ static void FluidSetBound(i32 b, f32* x) {
         x[FluidIX(i, FLUID_SIZE + 1)] = (b == 2) ? -x[FluidIX(i, FLUID_SIZE)] : x[FluidIX(i, FLUID_SIZE)];
     }
 
+    // Border corners
     x[FluidIX(0, 0)] = 0.5f * (x[FluidIX(1, 0)] + x[FluidIX(0, 1)]);
     x[FluidIX(0, FLUID_SIZE + 1)] = 0.5f * (x[FluidIX(1, FLUID_SIZE + 1)] + x[FluidIX(0, FLUID_SIZE)]);
     x[FluidIX(FLUID_SIZE + 1, 0)] = 0.5f * (x[FluidIX(FLUID_SIZE, 0)] + x[FluidIX(FLUID_SIZE + 1, 1)]);
     x[FluidIX(FLUID_SIZE + 1, FLUID_SIZE + 1)] = 0.5f * (x[FluidIX(FLUID_SIZE, FLUID_SIZE + 1)] + x[FluidIX(FLUID_SIZE + 1, FLUID_SIZE)]);
+
+    // Grid collisions
+    for (i32 i = 1; i <= FLUID_SIZE; i++) {
+        for (i32 j = 1; j <= FLUID_SIZE; j++) {
+            if (!solid[FluidIX(j, i)]) continue;
+
+            f32 sum = 0.0f;
+            i32 count = 0;
+
+            if (!solid[FluidIX(j + 1, i)]) {
+                sum += (b == 1) ? -x[FluidIX(j + 1, i)] : x[FluidIX(j + 1, i)];
+                count++;
+            }
+
+            if (!solid[FluidIX(j - 1, i)]) {
+                sum += (b == 1) ? -x[FluidIX(j - 1, i)] : x[FluidIX(j - 1, i)];
+                count++;
+            }
+
+            if (!solid[FluidIX(j, i + 1)]) {
+                sum += (b == 2) ? -x[FluidIX(j, i + 1)] : x[FluidIX(j, i + 1)];
+                count++;
+            }
+
+            if (!solid[FluidIX(j, i - 1)]) {
+                sum += (b == 2) ? -x[FluidIX(j, i - 1)] : x[FluidIX(j, i - 1)];
+                count++;
+            }
+
+            x[FluidIX(j, i)] = (count > 0) ? sum / count : 0.0f;
+        }
+    }
 }
 
-static void FluidDiffuse(i32 b, f32* x, f32* x0, f32 diff) {
+static void FluidDiffuse(i32 b, f32* x, f32* x0, f32 diff, bool* solid) {
     f32 a = FIXED_DT * diff * FLUID_CELLS;
     for (i32 k = 0; k < 20; k++) {
         for (i32 i = 1; i <= FLUID_SIZE; i++) {
@@ -69,11 +105,11 @@ static void FluidDiffuse(i32 b, f32* x, f32* x0, f32 diff) {
                 ) / (1 + 4 * a);
             }
         }
-        FluidSetBound(b, x);
+        FluidSetBound(b, x, solid);
     }
 }
 
-static void FluidAdvect(i32 b, f32* d, f32* d0, f32* u, f32* v) {
+static void FluidAdvect(i32 b, f32* d, f32* d0, f32* u, f32* v, bool* solid) {
     f32 dt0 = FIXED_DT * FLUID_SIZE;
     for (i32 i = 1; i <= FLUID_SIZE; i++) {
         for (i32 j = 1; j <= FLUID_SIZE; j++) {
@@ -101,10 +137,10 @@ static void FluidAdvect(i32 b, f32* d, f32* d0, f32* u, f32* v) {
                 t1 * d0[FluidIX(i1, j1)]);
         }
     }
-    FluidSetBound(b, d);
+    FluidSetBound(b, d, solid);
 }
 
-static void FluidProject(f32* u, f32* v, f32* p, f32* div) {
+static void FluidProject(f32* u, f32* v, f32* p, f32* div, bool* solid) {
     f32 h = 1.0 / FLUID_SIZE;
     for (i32 i = 1; i <= FLUID_SIZE; i++) {
         for (i32 j = 1; j <= FLUID_SIZE; j++) {
@@ -115,8 +151,8 @@ static void FluidProject(f32* u, f32* v, f32* p, f32* div) {
             p[FluidIX(i,j)] = 0;
         }
     }
-    FluidSetBound(0, div);
-    FluidSetBound(0, p);
+    FluidSetBound(0, div, solid);
+    FluidSetBound(0, p, solid);
     for (i32 k = 0; k < 20; k++) {
         for (i32 i = 1; i <= FLUID_SIZE; i++) {
             for (i32 j = 1; j <= FLUID_SIZE; j++) {
@@ -129,7 +165,7 @@ static void FluidProject(f32* u, f32* v, f32* p, f32* div) {
                 ) / 4;
             }
         }
-        FluidSetBound(0, p);
+        FluidSetBound(0, p, solid);
     }
     for (i32 i = 1; i <= FLUID_SIZE; i++) {
         for (i32 j = 1; j <= FLUID_SIZE; j++) {
@@ -141,29 +177,29 @@ static void FluidProject(f32* u, f32* v, f32* p, f32* div) {
             ) / h;
         }
     }
-    FluidSetBound(1, u);
-    FluidSetBound(2, v);
+    FluidSetBound(1, u, solid);
+    FluidSetBound(2, v, solid);
 }
 
-void FluidDensityStep(f32* x, f32* x0, f32* u, f32* v, f32 diff) {
+void FluidDensityStep(f32* x, f32* x0, f32* u, f32* v, f32 diff, bool* solid) {
     FluidAddSource(x, x0);
     SWAP(x0, x);
-    FluidDiffuse(0, x, x0, diff);
+    FluidDiffuse(0, x, x0, diff, solid);
     SWAP(x0, x);
-    FluidAdvect(0, x, x0, u, v);
+    FluidAdvect(0, x, x0, u, v, solid);
 }
 
-void FluidVelocityStep(f32* u, f32* v, f32* u0, f32* v0, f32 visc) {
+void FluidVelocityStep(f32* u, f32* v, f32* u0, f32* v0, f32 visc, bool* solid) {
     FluidAddSource(u, u0);
     FluidAddSource(v, v0);
     SWAP(u0, u);
-    FluidDiffuse(1, u, u0, visc);
+    FluidDiffuse(1, u, u0, visc, solid);
     SWAP(v0, v);
-    FluidDiffuse(2, v, v0, visc);
-    FluidProject(u, v, u0, v0);
+    FluidDiffuse(2, v, v0, visc, solid);
+    FluidProject(u, v, u0, v0, solid);
     SWAP(u0, u);
     SWAP(v0, v);
-    FluidAdvect(1, u, u0, u0, v0);
-    FluidAdvect(2, v, v0, u0, v0);
-    FluidProject(u, v, u0, v0);
+    FluidAdvect(1, u, u0, u0, v0, solid);
+    FluidAdvect(2, v, v0, u0, v0, solid);
+    FluidProject(u, v, u0, v0, solid);
 }

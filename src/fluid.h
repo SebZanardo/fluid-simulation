@@ -11,6 +11,7 @@ typedef struct {
     f32* v_prev;
     f32* dens;
     f32* dens_prev;
+    bool* solid;
 } FluidGrid;
 
 static const u32 FLUID_CELL_PIXELS = 8;
@@ -24,7 +25,7 @@ bool FluidIN(f32 x, f32 y);
 FluidGrid* FluidGridCreate(Arena* arena);
 void FluidGridClearChanges(FluidGrid* fluid);
 void FluidGridReset(FluidGrid* fluid);
-void FluidDensityStep(f32* x, f32* x0, f32* u, f32* v, f32 diff);
-void FluidVelocityStep(f32* u, f32* v, f32* u0, f32* v0, f32 visc);
+void FluidDensityStep(f32* x, f32* x0, f32* u, f32* v, f32 diff, bool* solid);
+void FluidVelocityStep(f32* u, f32* v, f32* u0, f32* v0, f32 visc, bool* solid);
 
 #endif // FLUID_H

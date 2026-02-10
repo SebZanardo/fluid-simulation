@@ -47,36 +47,49 @@ int main(void) {
 
         if (IsKeyPressed(KEY_SPACE)) { FluidGridReset(fluid); }
 
-        if (FluidIN(mouse_fluid_cell_pos.x, mouse_fluid_cell_pos.y) && IsMouseButtonDown(MOUSE_BUTTON_LEFT)) {
-            Vector2 mouse_vel = Vector2Subtract(mouse_pos, last_mouse_pos);
+        if (FluidIN(mouse_fluid_cell_pos.x, mouse_fluid_cell_pos.y)) {
             i32 grid_index = FluidIX(mouse_fluid_cell_pos.x, mouse_fluid_cell_pos.y);
-            fluid->dens_prev[grid_index] = 20.0f;
-            fluid->u_prev[grid_index] += mouse_vel.x;
-            fluid->v_prev[grid_index] += mouse_vel.y;
+
+            if (IsMouseButtonDown(MOUSE_BUTTON_LEFT)) {
+                Vector2 mouse_vel = Vector2Subtract(mouse_pos, last_mouse_pos);
+                fluid->dens_prev[grid_index] = 20.0f;
+                fluid->u_prev[grid_index] += mouse_vel.x;
+                fluid->v_prev[grid_index] += mouse_vel.y;
+            }
+
+            if (IsMouseButtonDown(MOUSE_BUTTON_RIGHT)) {
+                fluid->solid[grid_index] = true;
+            }
         }
 
         // Simulate
+        bool fluid_updated = false;
         while(accumulator >= FIXED_DT) {
-            FluidVelocityStep(fluid->u, fluid->v, fluid->u_prev, fluid->v_prev, visc);
-            FluidDensityStep(fluid->dens, fluid->dens_prev, fluid->u, fluid->v, diff);
+            FluidVelocityStep(fluid->u, fluid->v, fluid->u_prev, fluid->v_prev, visc, fluid->solid);
+            FluidDensityStep(fluid->dens, fluid->dens_prev, fluid->u, fluid->v, diff, fluid->solid);
             FluidGridClearChanges(fluid);
             accumulator -= FIXED_DT;
+            fluid_updated = true;
+        }
 
-            // Update render texture only when changing fluid
+        if (fluid_updated) {
+            // Update render texture once for final state
             for (i32 y = 0; y < FLUID_SIZE_BUFFERED; y++) {
                 for (i32 x = 0; x < FLUID_SIZE_BUFFERED; x++) {
                     i32 grid_index = x + y * TEXTURE_WIDTH;
                     f32 density = Clamp(fluid->dens[FluidIX(x, y)], 0.0f, 1.0f);
-                    Color c = (Color) {
-                        (u8)(density * density * density * 128),
-                        (u8)(density * density * 255),
-                        (u8)(density * 255),
-                        255
-                    };
+                    Color c = WHITE;
+                    if (!fluid->solid[(FluidIX(x, y))]) {
+                        c = (Color) {
+                            (u8)(density * density * density * 128),
+                            (u8)(density * density * 255),
+                            (u8)(density * 255),
+                            255
+                        };
+                    }
                     pixels[grid_index] = c;
                 }
             }
-
             UpdateTexture(texture, pixels);
         }
 
