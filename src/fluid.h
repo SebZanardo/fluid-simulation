@@ -14,8 +14,8 @@ typedef struct {
     bool* solid;
 } FluidGrid;
 
-static const u32 FLUID_CELL_PIXELS = 8;
-static const u32 FLUID_SIZE = 64;
+static const u32 FLUID_CELL_PIXELS = 4;
+static const u32 FLUID_SIZE = 128;
 static const u32 FLUID_SIZE_BUFFERED = FLUID_SIZE + 2;
 static const u32 FLUID_CELLS = FLUID_SIZE * FLUID_SIZE;
 static const u32 FLUID_CELLS_BUFFERED = FLUID_SIZE_BUFFERED * FLUID_SIZE_BUFFERED;

@@ -170,7 +170,7 @@ typedef struct {
     i32 y;
 } IntVector2;
 
-#define abs_i64(v) (i64)llabs(v)
+#define abs_i64(v) (i64)((v) < 0 ? -(v) : (v))
 
 #define sqrt_f32(v)   sqrtf(v)
 #define log_f32(v)    logf(v)
